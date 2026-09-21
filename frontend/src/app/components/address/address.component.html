@@ -26,13 +26,11 @@
               <tbody>
                 <tr><ng-container *ngTemplateOutlet="balanceRow"></ng-container></tr>
                 <tr><ng-container *ngTemplateOutlet="pendingBalanceRow"></ng-container></tr>
-                @if (!address.electrum) {
-                  <tr><ng-container *ngTemplateOutlet="utxoRow"></ng-container></tr>
-                  <tr><ng-container *ngTemplateOutlet="pendingUtxoRow"></ng-container></tr>
-                }
+                <tr><ng-container *ngTemplateOutlet="utxoRow"></ng-container></tr>
+                <tr><ng-container *ngTemplateOutlet="pendingUtxoRow"></ng-container></tr>
                 @if (network === 'liquid' || network === 'liquidtestnet') {
                   <tr><ng-container *ngTemplateOutlet="liquidRow"></ng-container></tr>
-                } @else if (!address.electrum) {
+                } @else {
                   <tr><ng-container *ngTemplateOutlet="volumeRow"></ng-container></tr>
                 }
                 <tr><ng-container *ngTemplateOutlet="typeRow"></ng-container></tr>
@@ -48,20 +46,16 @@
                   <ng-container *ngTemplateOutlet="spacerCell"></ng-container>
                   <ng-container *ngTemplateOutlet="pendingBalanceRow"></ng-container>
                 </tr>
-                @if (!address.electrum) {
                 <tr>
                   <ng-container *ngTemplateOutlet="utxoRow"></ng-container>
                   <ng-container *ngTemplateOutlet="spacerCell"></ng-container>
                   <ng-container *ngTemplateOutlet="pendingUtxoRow"></ng-container>
                 </tr>
-                }
                 <tr>
                   @if (network === 'liquid' || network === 'liquidtestnet') {
                     <ng-container *ngTemplateOutlet="liquidRow"></ng-container>
-                  } @else if (!address.electrum) {
-                    <ng-container *ngTemplateOutlet="volumeRow"></ng-container>
                   } @else {
-                    <ng-container *ngTemplateOutlet="emptyTd"></ng-container>
+                    <ng-container *ngTemplateOutlet="volumeRow"></ng-container>
                   }                  
                   <ng-container *ngTemplateOutlet="spacerCell"></ng-container>
                   <ng-container *ngTemplateOutlet="typeRow"></ng-container>
@@ -100,7 +94,7 @@
       </div>
     </ng-container>
 
-    <ng-container *ngIf="(stateService.backend$ | async) === 'esplora' && address && transactions && transactions.length > 2">
+    <ng-container *ngIf="address && transactions && transactions.length > 2">
       <br>
       <div class="title-tx">
         <h2 class="text-start" i18n="address.balance-history">Balance History</h2>
@@ -115,13 +109,13 @@
         </div>
         <div class="row">
           <div class="col-md">
-            <app-address-graph [address]="addressString" [isPubkey]="address?.is_pubkey" [stats]="address.chain_stats" [period]="balancePeriod" left="80" />
+            <app-address-graph [address]="addressString" [isPubkey]="address?.is_pubkey" [stats]="address.chain_stats" [addressSummary$]="addressSummary$" [period]="balancePeriod" left="80" />
           </div>
         </div>
       </div>
     </ng-container>
 
-    <ng-container *ngIf="(stateService.backend$ | async) === 'esplora' && address && utxos && utxos.length > 2">
+    <ng-container *ngIf="address && utxos && utxos.length > 2">
       <br>
       <div class="title-tx">
         <h2 class="text-start" i18n="address.unspent-outputs">Unspent Outputs</h2>

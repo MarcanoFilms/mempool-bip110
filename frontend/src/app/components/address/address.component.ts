@@ -3,12 +3,12 @@ import { UntypedFormBuilder, UntypedFormGroup } from '@angular/forms';
 import { ActivatedRoute, ParamMap } from '@angular/router';
 import { ElectrsApiService } from '@app/services/electrs-api.service';
 import { switchMap, filter, catchError, map, tap } from 'rxjs/operators';
-import { Address, ChainStats, Transaction, Utxo, Vin } from '@interfaces/electrs.interface';
+import { Address, AddressTxSummary, ChainStats, Transaction, Utxo, Vin } from '@interfaces/electrs.interface';
 import { WebsocketService } from '@app/services/websocket.service';
 import { StateService } from '@app/services/state.service';
 import { AudioService } from '@app/services/audio.service';
 import { ApiService } from '@app/services/api.service';
-import { of, merge, Subscription, Observable, forkJoin } from 'rxjs';
+import { of, merge, Subscription, Observable, forkJoin, BehaviorSubject } from 'rxjs';
 import { SeoService } from '@app/services/seo.service';
 import { seoDescriptionNetwork } from '@app/shared/common.utils';
 import { AddressInformation } from '@interfaces/node-api.interface';
@@ -132,6 +132,7 @@ export class AddressComponent implements OnInit, OnDestroy {
   fullyLoaded = false;
   chainStats: AddressStats;
   mempoolStats: AddressStats;
+  addressSummary$: BehaviorSubject<AddressTxSummary[]> = new BehaviorSubject(null);
 
   exampleChannel?: any;
 
@@ -190,6 +191,7 @@ export class AddressComponent implements OnInit, OnDestroy {
           this.isLoadingTransactions = true;
           this.transactions = null;
           this.utxos = null;
+          this.addressSummary$.next(null);
           this.addressInfo = null;
           this.exampleChannel = null;
           this.tapTreeIncomplete = false;
@@ -314,6 +316,7 @@ export class AddressComponent implements OnInit, OnDestroy {
           this.fullyLoaded = true;
         }
         this.isLoadingTransactions = false;
+        this.buildAddressSummary();
 
         const addressVin: Vin[] = [];
         const vinIds: string[] = [];
@@ -504,6 +507,7 @@ export class AddressComponent implements OnInit, OnDestroy {
           this.fullyLoaded = true;
         }
         this.isLoadingTransactions = false;
+        this.buildAddressSummary();
       },
       (error) => {
         this.isLoadingTransactions = false;
@@ -518,6 +522,36 @@ export class AddressComponent implements OnInit, OnDestroy {
   updateChainStats(): void {
     this.chainStats = new AddressStats(this.address.chain_stats, this.address.address);
     this.mempoolStats = new AddressStats(this.address.mempool_stats, this.address.address);
+  }
+
+  buildAddressSummary(): void {
+    if (!this.transactions || !this.address) {
+      return;
+    }
+    const addr = this.address.address;
+    const summary: AddressTxSummary[] = this.transactions
+      .filter(tx => tx.status?.confirmed)
+      .map(tx => {
+        let value = 0;
+        for (const vout of tx.vout) {
+          if (vout.scriptpubkey_address === addr) {
+            value += vout.value;
+          }
+        }
+        for (const vin of tx.vin) {
+          if (vin.prevout?.scriptpubkey_address === addr) {
+            value -= vin.prevout.value;
+          }
+        }
+        return {
+          txid: tx.txid,
+          value,
+          height: tx.status.block_height,
+          time: tx.status.block_time,
+        };
+      })
+      .sort((a, b) => b.time - a.time);
+    this.addressSummary$.next(summary);
   }
 
   setBalancePeriod(period: 'all' | '1m'): boolean {
