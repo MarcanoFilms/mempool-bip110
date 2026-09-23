@@ -50,13 +50,15 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
     try {
       const balance = await this.$getScriptHashBalance(addressInfo.scriptPubKey);
       const history = await this.$getScriptHashHistory(addressInfo.scriptPubKey);
+      const utxos = await this.$getScriptHashUnspent(this.encodeScriptHash(addressInfo.scriptPubKey));
 
       const unconfirmed = history.filter((h) => h.fee).length;
+      const confirmedUtxoCount = utxos.filter((u) => u.height > 0).length;
 
       return {
         'address': addressInfo.address,
         'chain_stats': {
-          'funded_txo_count': 0,
+          'funded_txo_count': confirmedUtxoCount,
           'funded_txo_sum': balance.confirmed ? balance.confirmed : 0,
           'spent_txo_count': 0,
           'spent_txo_sum': balance.confirmed < 0 ? balance.confirmed : 0,
@@ -97,7 +99,7 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
           startingIndex = pos + 1;
         }
       }
-      const endIndex = Math.min(startingIndex + 10, history.length);
+      const endIndex = Math.min(startingIndex + 50, history.length);
 
       for (let i = startingIndex; i < endIndex; i++) {
         const tx = await this.$getRawTransaction(history[i].tx_hash, false, true);
@@ -178,7 +180,7 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
           startingIndex = pos + 1;
         }
       }
-      const endIndex = Math.min(startingIndex + 10, history.length);
+      const endIndex = Math.min(startingIndex + 50, history.length);
 
       for (let i = startingIndex; i < endIndex; i++) {
         const tx = await this.$getRawTransaction(history[i].tx_hash, false, true);
