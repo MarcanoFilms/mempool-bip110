@@ -62,10 +62,13 @@
 
   <!-- Precio y rendimiento en MÓVIL: apilados junto al logo (en escritorio van en la nav) -->
   <div class="header-extras-mobile d-lg-none" *ngIf="btcb2Price !== null">
-    <a href="https://neoxa.exchange/trade/BTCB2_USDC" target="_blank" rel="noopener noreferrer">1BTC = <b>${{ btcb2Price | number: '1.2-2' }}</b></a>
-    <a *ngIf="btcb2BtcSats !== null" href="https://neoxa.exchange/trade/BTCB2_BTC" target="_blank" rel="noopener noreferrer">1BTC = <b>{{ btcb2BtcSats | number: '1.0-0' }}</b> Poolsats</a>
+    <a href="https://neoxa.exchange/trade/BTCB2_USDC" target="_blank" rel="noopener noreferrer">1 BTC = <b>${{ btcb2Price | number: '1.2-2' }}</b></a>
+    <a *ngIf="btcb2BtcSats !== null" href="https://neoxa.exchange/trade/BTCB2_BTC" target="_blank" rel="noopener noreferrer">1 BTC = <b>{{ btcb2BtcSats | number: '1.0-0' }}</b> Poolsats</a>
     <a *ngIf="thsBtcDay !== null" href="https://www.miningrigrentals.com/rigs/blake2b" target="_blank" rel="noopener noreferrer">1 TH/s earns (est.) <b>{{ thsBtcDay | number: '1.4-4' }} BTC/Day</b><span *ngIf="thsUsdDay !== null"> · ${{ thsUsdDay | number: '1.2-2' }}</span></a>
-    <a *ngIf="mrrBtcPerThDay !== null" href="https://www.miningrigrentals.com/rigs/blake2b" target="_blank" rel="noopener noreferrer">1 TH/s rent <b>{{ mrrBtcPerThDay | number: '1.5-5' }} Poolcoins/day</b><span *ngIf="mrrUsdPerThDay !== null"> · ${{ mrrUsdPerThDay | number: '1.2-2' }}</span></a>
+    <a *ngIf="mrrBtcPerThDay !== null" href="https://www.miningrigrentals.com/rigs/blake2b" target="_blank" rel="noopener noreferrer">1 TH/s rent <b>{{ mrrPoolsatsPerThDay | number: '1.0-0' }} Poolsats/day</b><span *ngIf="mrrUsdPerThDay !== null"> · ${{ mrrUsdPerThDay | number: '1.2-2' }}</span></a>
+    <a *ngIf="kwhPerBtc !== null" href="https://www.goldshell.com/" target="_blank" rel="noopener noreferrer">1 BTC = <b>{{ kwhPerBtc | number: '1.0-0' }} kWh</b> ({{ minerName }})</a>
+    <a *ngIf="yshValue !== null" [routerLink]="['/tools/ysh' | relativeUrl]">YSH 1 BTC = <b>{{ yshValue | number: '1.2-2' }} {{ yshUnit }}</b></a>
+    <span *ngIf="chainSizeGB !== null">Blockchain <b>{{ chainSizeGB | number: '1.2-2' }} GB</b></span>
   </div>
 
   <div (window:resize)="onResize()" ngbDropdown class="dropdown-container" *ngIf="isDropdownVisible">
@@ -130,21 +133,48 @@
       </li>
       <!-- Coste de alquiler más barato de 1 TH/s en MiningRigRentals (BTC real + $) -->
       <li class="nav-item d-none d-lg-flex" id="btn-rent" *ngIf="mrrBtcPerThDay !== null">
-        <a class="nav-link yield-info" href="https://www.miningrigrentals.com/rigs/blake2b" target="_blank" rel="noopener noreferrer" title="Alquiler más barato de 1 TH/s en MiningRigRentals (precio en BTC real)">
+        <a class="nav-link yield-info" href="https://www.miningrigrentals.com/rigs/blake2b" target="_blank" rel="noopener noreferrer" title="Alquiler más barato de 1 TH/s en MiningRigRentals, en Poolsats (sats de BTC real) por día">
           <span class="yield-label">1 TH/s rent</span>
-          <span class="yield-value">{{ mrrBtcPerThDay | number: '1.5-5' }} Poolcoins/day<span *ngIf="mrrUsdPerThDay !== null"> · ${{ mrrUsdPerThDay | number: '1.2-2' }}</span></span>
+          <span class="yield-value">{{ mrrPoolsatsPerThDay | number: '1.0-0' }} Poolsats/day<span *ngIf="mrrUsdPerThDay !== null"> · ${{ mrrUsdPerThDay | number: '1.2-2' }}</span></span>
         </a>
       </li>
       <!-- Precio de Bitcoin-Blake2b (BTCB2/USDC) en neoxa -->
       <li class="nav-item d-none d-lg-flex" id="btn-price" *ngIf="btcb2Price !== null">
         <a class="nav-link price-link" href="https://neoxa.exchange/trade/BTCB2_USDC" target="_blank" rel="noopener noreferrer" title="Bitcoin-Blake2b en neoxa.exchange (BTCB2/USDC)">
-          <span class="price-value">1BTC = ${{ btcb2Price | number: '1.2-2' }}</span>
+          <span class="price-value">1 BTC = ${{ btcb2Price | number: '1.2-2' }}</span>
         </a>
       </li>
       <!-- Precio de Bitcoin-Blake2b contra BTC (BTCB2/BTC) en neoxa -->
       <li class="nav-item d-none d-lg-flex" id="btn-price-btc" *ngIf="btcb2BtcSats !== null">
         <a class="nav-link price-link" href="https://neoxa.exchange/trade/BTCB2_BTC" target="_blank" rel="noopener noreferrer" title="Bitcoin-Blake2b contra BTC en neoxa.exchange (BTCB2/BTC)">
-          <span class="price-value">1BTC = {{ btcb2BtcSats | number: '1.0-0' }} Poolsats</span>
+          <span class="price-value">1 BTC = {{ btcb2BtcSats | number: '1.0-0' }} Poolsats</span>
+        </a>
+      </li>
+      <!-- Energía equivalente a 1 BTC (Bitcoin-Blake2b) con el ASIC de referencia -->
+      <li class="nav-item d-none d-lg-flex" id="btn-energy" *ngIf="kwhPerBtc !== null">
+        <a class="nav-link price-link" href="https://www.goldshell.com/" target="_blank" rel="noopener noreferrer" [title]="'Energía necesaria para minar 1 BTC de Bitcoin-Blake2b con un ' + minerName + ' (14 TH/s, 3300 W), a la dificultad actual'">
+          <span class="price-value">1 BTC = {{ kwhPerBtc | number: '1.0-0' }} kWh</span>
+          <span class="price-miner">({{ minerName }})</span>
+        </a>
+      </li>
+      <!-- Hash-even: hashrate de red repartido entre las monedas en circulación -->
+      <li class="nav-item d-none d-lg-flex" id="btn-ysh" *ngIf="yshValue !== null">
+        <a class="nav-link yield-info" [routerLink]="['/tools/ysh' | relativeUrl]" title="YSH (Your Security Hashrate): el punto de equilibrio entre lo que minas y lo que tienes. Es el hashrate de la red repartido entre las monedas en circulación. Pincha para calcular el tuyo.">
+          <span class="yield-label">YSH</span>
+          <span class="yield-value">1 BTC = {{ yshValue | number: '1.2-2' }} {{ yshUnit }}</span>
+        </a>
+      </li>
+      <!-- Lo que pesa la cadena Bitcoin-Blake2b en disco -->
+      <li class="nav-item d-none d-lg-flex" id="btn-chainsize" *ngIf="chainSizeGB !== null">
+        <span class="nav-link yield-info chain-size" title="Lo que ocupa en disco la cadena Bitcoin-Blake2b completa, según el nodo BIP110 que sirve esta web">
+          <span class="yield-label">Blockchain</span>
+          <span class="yield-value">{{ chainSizeGB | number: '1.2-2' }} GB</span>
+        </span>
+      </li>
+      <!-- Enlace a la web personal de Kilombino -->
+      <li class="nav-item d-none d-lg-flex" id="btn-kilombino">
+        <a class="nav-link" href="https://kilombino.com" target="_blank" rel="noopener noreferrer" title="kilombino.com">
+          <div class="svg-wrapper"><img src="/resources/kilombino-icon.jpg" alt="kilombino.com" class="kilombino-nav-icon"></div>
         </a>
       </li>
     </ul>

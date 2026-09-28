@@ -25,6 +25,7 @@ import { AccelerationsListComponent } from '@components/acceleration/acceleratio
 import { AddressComponent } from '@components/address/address.component';
 import { WalletComponent } from '@components/wallet/wallet.component';
 import { CalculatorComponent } from '@components/calculator/calculator.component';
+import { YshComponent } from '@components/ysh/ysh.component';
 
 const browserWindow = window || {};
 // @ts-ignore
@@ -38,6 +39,17 @@ const routes: Routes = [
       {
         path: 'tools/calculator',
         component: CalculatorComponent
+      },
+      {
+        path: 'tools/ysh',
+        component: YshComponent
+      },
+      {
+        // El concepto se llamaba Hash-even antes de pasar a YSH; se mantiene la ruta
+        // vieja redirigiendo para no romper enlaces ya compartidos.
+        path: 'tools/hash-even',
+        redirectTo: 'tools/ysh',
+        pathMatch: 'full'
       },
       {
         path: 'mining/pool/:slug',
@@ -55,25 +67,20 @@ const routes: Routes = [
           },
         ]
       },
+      // El acelerador es de la cadena SHA256d: en BLAKE2b no existe ese servicio y no
+      // debe existir. Las rutas se dejan redirigiendo a la portada en vez de borrarlas,
+      // para que un enlace viejo no acabe en un 404.
       {
         path: 'acceleration',
-        data: { networks: ['bitcoin'], networkSpecific: true, onlySubnet: [''] },
-        component: StartComponent,
-        children: [
-          {
-            path: '',
-            component: AcceleratorDashboardComponent,
-          }
-        ]
+        redirectTo: '',
       },
       {
         path: 'acceleration/list/:page',
-        data: { networks: ['bitcoin'], networkSpecific: true, onlySubnet: [''] },
-        component: AccelerationsListComponent,
+        redirectTo: '',
       },
       {
         path: 'acceleration/list',
-        redirectTo: 'acceleration/list/1',
+        redirectTo: '',
       },
       {
         path: 'mempool-block/:id',
@@ -155,9 +162,9 @@ const routes: Routes = [
             component: BlockSizesWeightsGraphComponent,
           },
           {
+            // Ver arriba: el acelerador no aplica a BLAKE2b.
             path: 'acceleration/fees',
-            data: { networks: ['bitcoin'], networkSpecific: true, onlySubnet: [''] },
-            component: AccelerationFeesGraphComponent,
+            redirectTo: '',
           },
           {
             path: 'lightning',

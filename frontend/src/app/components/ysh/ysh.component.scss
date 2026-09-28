@@ -1,0 +1,140 @@
+.ysh {
+  padding-top: 20px;
+  padding-bottom: 40px;
+
+  .lead {
+    max-width: 700px;
+    margin: 0 auto 30px;
+    font-size: 0.95rem;
+    color: var(--transparent-fg);
+  }
+
+  .input-group-text {
+    min-width: 75px;
+    justify-content: center;
+    font-weight: 600;
+    color: #ff9d1c;
+  }
+
+  .result-box {
+    background: var(--box-bg);
+    border-radius: 6px;
+    padding: 24px 16px;
+  }
+
+  .result-label {
+    font-size: 0.85rem;
+    color: var(--transparent-fg);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .result-value {
+    font-size: 40px;
+    font-weight: 600;
+    color: #ff9d1c;
+    line-height: 1.2;
+    margin: 6px 0;
+    // Un hashrate largo no debe desbordar en móvil
+    overflow-wrap: anywhere;
+  }
+
+  .result-sub {
+    font-size: 0.9rem;
+    color: var(--transparent-fg);
+  }
+
+  .detail-table {
+    margin-bottom: 0;
+    td {
+      padding: 8px 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    tr:first-child td {
+      border-top: none;
+    }
+  }
+
+  .muted-table td,
+  .muted {
+    color: var(--transparent-fg);
+  }
+
+  .sigla {
+    font-size: 0.55em;
+    vertical-align: middle;
+    color: #ff9d1c;
+    border: 1px solid rgba(255, 157, 28, 0.5);
+    border-radius: 4px;
+    padding: 2px 7px;
+    margin-left: 8px;
+    letter-spacing: 0.08em;
+  }
+
+  .field-hint {
+    font-size: 0.8rem;
+    color: var(--transparent-fg);
+    margin: 0 0 18px 4px;
+  }
+
+  // La caja del calculo inverso se distingue de la del YSH: es una respuesta distinta,
+  // no el mismo dato repetido.
+  .protect-box {
+    border: 1px solid rgba(255, 157, 28, 0.25);
+    background: transparent;
+    .result-value {
+      font-size: 32px;
+    }
+  }
+
+  .verdict {
+    border-radius: 6px;
+    padding: 14px 16px;
+    border-left: 4px solid;
+    background: var(--box-bg);
+  }
+
+  .verdict-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .verdict-detail {
+    font-size: 0.88rem;
+    color: var(--transparent-fg);
+  }
+
+  // Corto y pasado NO se pintan igual de "malo": quedarse corto es lo que el concepto
+  // pretende corregir, pasarse es solo generosidad con los demás.
+  .verdict-under {
+    border-left-color: #ff6b5e;
+    .verdict-title { color: #ff6b5e; }
+  }
+  .verdict-even {
+    border-left-color: #46d16a;
+    .verdict-title { color: #46d16a; }
+  }
+  // Ojo: estas reglas han de ir DESPUÉS de `.verdict`, que fija `border-left: 4px solid`
+  // como atajo; puesto antes, ese atajo le devuelve el color a currentColor y el borde
+  // sale gris. Me pasó al añadir la de "suspicious".
+  .verdict-suspicious {
+    border-left-color: #ff6b5e;
+    .verdict-title { color: #ff6b5e; }
+  }
+  .verdict-over {
+    border-left-color: #ff9d1c;
+    .verdict-title { color: #ff9d1c; }
+  }
+
+  .footnote {
+    font-size: 0.8rem;
+    color: var(--transparent-fg);
+    margin-top: 16px;
+  }
+
+  @media (max-width: 767.98px) {
+    .result-value {
+      font-size: 30px;
+    }
+  }
+}

@@ -1,0 +1,169 @@
+<div class="container-xl ysh">
+
+  <div class="text-center">
+    <h2><ng-container i18n="@@ysh.title">Your Security Hashrate</ng-container> <span class="sigla">YSH</span></h2>
+    <p class="lead" i18n="@@ysh.intro">
+      Your YSH is the break-even point between what you mine and what you hold
+      in Bitcoin-Blake2b: the network's hashrate shared out among every coin in circulation,
+      multiplied by the coins you keep. It is the share of the chain's security that your own
+      money calls for.
+    </p>
+    <p class="lead" i18n="@@ysh.intro2">
+      The idea is to stay close to it. Falling well short means your money is being guarded by
+      people other than you; overshooting by a lot means you are paying to guard other people's
+      money.
+    </p>
+  </div>
+
+  <ng-container *ngIf="ready; else loading">
+
+    <div class="row justify-content-center">
+      <div class="col-lg-7">
+
+        <div class="input-group input-group-lg mb-2">
+          <span class="input-group-text">BTC</span>
+          <input type="text" inputmode="decimal" class="form-control" [value]="amount"
+                 (input)="onAmountChange($any($event.target).value)" placeholder="1.0">
+        </div>
+        <p class="field-hint" i18n="@@ysh.hint-hold">What you hold.</p>
+
+        <div class="result-box text-center mb-3">
+          <div class="result-label" i18n="@@ysh.your-ysh">Your YSH</div>
+          <div class="result-value">{{ formatHashrate(yourHashrate) }}</div>
+          <div class="result-sub" *ngIf="shareOfNetwork !== null" i18n="@@ysh.share-of-network">
+            {{ shareText }} of the network
+          </div>
+        </div>
+
+        <div class="input-group input-group-lg mb-2">
+          <span class="input-group-text">TH/s</span>
+          <input type="text" inputmode="decimal" class="form-control"
+                 (input)="onMinedChange($any($event.target).value)"
+                 placeholder="optional" i18n-placeholder="@@ysh.placeholder-optional">
+        </div>
+        <p class="field-hint" i18n="@@ysh.hint-mine">What you mine. Fill it in to see whether you are in balance, and how much you could protect.</p>
+
+        <div class="result-box protect-box text-center mb-3" *ngIf="protectableBtc !== null">
+          <div class="result-label" i18n="@@ysh.protects.label">That hashrate protects up to</div>
+          <div class="result-value">{{ protectableBtcText }} BTC</div>
+          <div class="result-sub" i18n="@@ysh.protects.sub">the holdings whose security that hashrate pays for</div>
+        </div>
+
+        <div class="verdict mb-4" *ngIf="balanceKey as key" [ngClass]="'verdict-' + key">
+
+          <ng-container *ngIf="key === 'under'">
+            <div class="verdict-title" i18n="@@ysh.under.title">You are falling short</div>
+            <div class="verdict-detail" i18n="@@ysh.under.detail">
+              You mine {{ ratioPercentText }} % of your YSH. The rest is being paid for by other
+              miners: your money is being guarded by people other than you.
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="key === 'even'">
+            <div class="verdict-title" i18n="@@ysh.even.title">In balance</div>
+            <div class="verdict-detail" i18n="@@ysh.even.detail">
+              You mine {{ ratioPercentText }} % of your YSH. You are paying roughly the share of
+              security that your holdings call for.
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="key === 'over'">
+            <div class="verdict-title" i18n="@@ysh.over.title">You are overshooting</div>
+            <div class="verdict-detail" i18n="@@ysh.over.detail">
+              You mine {{ ratioTimesText }} times your YSH. You are contributing more security
+              than your holdings call for, so part of what you pay protects other people's coins.
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="key === 'suspicious'">
+            <div class="verdict-title" i18n="@@ysh.suspicious.title">You could be attacking the network</div>
+            <div class="verdict-detail" i18n="@@ysh.suspicious.detail">
+              You mine {{ ratioTimesText }} times your YSH. That is far beyond anything your own
+              coins call for, so you are not doing it to protect your money: at this rate you are
+              either selling the hashrate or building a position against the chain. What settles
+              which of the two it is, is your share of the total — right now {{ sharePercentText }} %.
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="key === 'danger'">
+            <div class="verdict-title" i18n="@@ysh.danger.title">Dangerous territory</div>
+            <div class="verdict-detail" i18n="@@ysh.danger.detail">
+              You control {{ sharePercentText }} % of the network. Past roughly a quarter of the
+              total, withholding blocks starts to pay off and the chain stops being safe for
+              everyone — you included. This is no longer about your own coins.
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="key === 'attack'">
+            <div class="verdict-title" i18n="@@ysh.attack.title">You would be attacking the network</div>
+            <div class="verdict-detail" i18n="@@ysh.attack.detail">
+              You control {{ sharePercentText }} % of the network. With a majority of the hashrate
+              you can reorganise the chain and spend the same coins twice. That is not paying for
+              security any more: it is the very attack the network is built to resist.
+            </div>
+          </ng-container>
+
+        </div>
+
+        <table class="table table-borderless detail-table">
+          <tbody>
+            <tr>
+              <td i18n="@@ysh.equivalent-to">Equivalent to</td>
+              <td class="text-end">
+                <ng-container *ngIf="minersAtLeastOne; else minerFraction">{{ minersNeededText }} &times; {{ minerName }}</ng-container>
+                <ng-template #minerFraction><span i18n="@@ysh.miner-percent">{{ minersPercentText }} % of one {{ minerName }}</span></ng-template>
+              </td>
+            </tr>
+            <tr>
+              <td i18n="@@ysh.power">Power draw</td>
+              <td class="text-end" i18n="@@ysh.power-value">{{ wattsValueText }} W ({{ kwhPerDayText }} kWh/day)</td>
+            </tr>
+            <tr *ngIf="rentUsdPerDay !== null">
+              <td i18n="@@ysh.rent-cost">Renting it would cost</td>
+              <td class="text-end" i18n="@@ysh.rent-per-day">${{ rentUsdPerDay | number: '1.2-4' }} a day</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <hr>
+
+        <table class="table table-borderless detail-table muted-table">
+          <tbody>
+            <tr>
+              <td i18n="@@ysh.network-hashrate">Network hashrate</td>
+              <td class="text-end">{{ formatHashrate(networkHashrate) }}</td>
+            </tr>
+            <tr>
+              <td i18n="@@ysh.coins-in-circulation">Coins in circulation</td>
+              <td class="text-end">{{ circulatingSupply | number: '1.0-0' }} BTC</td>
+            </tr>
+            <tr>
+              <td i18n="@@ysh.per-coin">YSH per coin</td>
+              <td class="text-end">1 BTC = {{ formatHashrate(hashPerBtc) }}</td>
+            </tr>
+            <tr>
+              <td i18n="@@ysh.block-height">Block height</td>
+              <td class="text-end">{{ blockHeight | number: '1.0-0' }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="footnote" i18n="@@ysh.footnote">
+          The figures refresh every minute. The network hashrate is an estimate from recent
+          blocks, so it wobbles a little between readings; that is why the balance verdict is
+          given with a wide margin, give or take 25 %. The supply is what has been issued up to
+          the current height, adding up the subsidy of each halving epoch.
+        </p>
+
+      </div>
+    </div>
+
+  </ng-container>
+
+  <ng-template #loading>
+    <div class="text-center">
+      <div class="spinner-border text-light"></div>
+    </div>
+  </ng-template>
+
+</div>
