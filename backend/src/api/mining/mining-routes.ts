@@ -185,10 +185,11 @@ class MiningRoutes {
     try {
       currentHashrate = await bitcoinClient.getNetworkHashPs(1008);
       // 29.4.2+ eliminó el RPC getdifficulty y devuelve `difficulty` null; el valor real
-      // está en `difficulty_blake2b` de getblockchaininfo.
+      // (dificultad PoW BLAKE2b, misma escala que reportan el nodo y el pool) está en
+      // `difficulty_blake2b` de getblockchaininfo. Usamos esa escala completa en todo el
+      // stack (convertBlock ya la guarda igual), sin dividir entre 2^32.
       const bci = await bitcoinClient.getBlockchainInfo();
-      // difficulty_blake2b viene ×2^32 respecto a la escala histórica; normalizamos.
-      currentDifficulty = bci.difficulty ?? (bci.difficulty_blake2b != null ? bci.difficulty_blake2b / 4294967296 : 0);
+      currentDifficulty = bci.difficulty_blake2b ?? bci.difficulty ?? 0;
     } catch (e) {
       logger.debug('Bitcoin Core is not available, using zeroed value for current hashrate and difficulty');
     }
