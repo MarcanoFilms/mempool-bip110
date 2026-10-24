@@ -136,6 +136,10 @@ interface IConfig {
     LIQUID_API: string;
     LIQUID_ONION: string;
   };
+  SPAMCHAIN: {
+    ENABLED: boolean;
+    API: string;
+  };
   MAXMIND: {
     ENABLED: boolean;
     GEOLITE2_CITY: string;
@@ -309,6 +313,10 @@ const defaults: IConfig = {
     'LIQUID_API': 'https://liquid.network/api/v1',
     'LIQUID_ONION': 'http://liquidmom47f6s3m53ebfxn47p76a6tlnxib3wp6deux7wuzotdr6cyd.onion/api/v1'
   },
+  'SPAMCHAIN': {
+    'ENABLED': true,
+    'API': 'https://mempool.space/api'
+  },
   'MAXMIND': {
     'ENABLED': false,
     'GEOLITE2_CITY': '/usr/local/share/GeoIP/GeoLite2-City.mmdb',
@@ -362,6 +370,7 @@ class Config implements IConfig {
   CLIGHTNING: IConfig['CLIGHTNING'];
   SOCKS5PROXY: IConfig['SOCKS5PROXY'];
   EXTERNAL_DATA_SERVER: IConfig['EXTERNAL_DATA_SERVER'];
+  SPAMCHAIN: IConfig['SPAMCHAIN'];
   MAXMIND: IConfig['MAXMIND'];
   REPLICATION: IConfig['REPLICATION'];
   MEMPOOL_SERVICES: IConfig['MEMPOOL_SERVICES'];
@@ -385,6 +394,7 @@ class Config implements IConfig {
     this.CLIGHTNING = configs.CLIGHTNING;
     this.SOCKS5PROXY = configs.SOCKS5PROXY;
     this.EXTERNAL_DATA_SERVER = configs.EXTERNAL_DATA_SERVER;
+    this.SPAMCHAIN = configs.SPAMCHAIN;
     this.MAXMIND = configs.MAXMIND;
     this.REPLICATION = configs.REPLICATION;
     this.MEMPOOL_SERVICES = configs.MEMPOOL_SERVICES;
