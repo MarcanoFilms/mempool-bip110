@@ -23,6 +23,7 @@ import { calculateMempoolTxCpfp } from '../cpfp';
 import { handleError } from '../../utils/api';
 import poolsUpdater from '../../tasks/pools-updater';
 import chainTips from '../chain-tips';
+import blake2bWidget from '../blake2b-widget';
 import spamchain from '../spamchain';
 
 const TXID_REGEX = /^[a-f0-9]{64}$/i;
@@ -72,6 +73,9 @@ class BitcoinRoutes {
       .get(config.MEMPOOL.API_URL_PREFIX + 'ocean/hashrate-stats', this.getOceanHashrateStats.bind(this))
       .get(config.MEMPOOL.API_URL_PREFIX + 'blake2b/peers-by-version', this.getBlake2bPeersByVersion.bind(this))
       .get(config.MEMPOOL.API_URL_PREFIX + 'blake2b/chain-size', this.getBlake2bChainSize.bind(this))
+      .get(config.MEMPOOL.API_URL_PREFIX + 'blake2b/widget', this.getBlake2bWidget.bind(this))
+      .get(config.MEMPOOL.API_URL_PREFIX + 'blake2b/spamchain/tx/:txId', this.getBlake2bSpamchainTx.bind(this))
+      .get(config.MEMPOOL.API_URL_PREFIX + 'blake2b/relay-policy', this.getBlake2bRelayPolicy)
       .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/blake2b-header', this.getBlake2bBlockHeader.bind(this))
       .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/rbf', this.getRbfHistory)
       .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/cached', this.getCachedTx)
@@ -112,7 +116,14 @@ class BitcoinRoutes {
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/hex', this.getRawTransaction)
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/status', this.getTransactionStatus)
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/outspends', this.getTransactionOutspends)
-          .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/spamchain', this.$getTransactionSpamchain)
+          // Rutas Esplora que faltaban. Las usa el wallet Ark de Paperclip (bark) cuando
+          // se conecta por Esplora en vez de por RPC a un nodo, que es lo que permite
+          // llevar Ark a un móvil (Kilombino wallet). Siguen el formato de Blockstream.
+          .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/raw', this.getRawTransactionBinary)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/outspend/:vout', this.getTransactionOutspend)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'scripthash/:scripthash/txs/chain/:lastSeen', this.getScriptHashTransactionsChain.bind(this))
+          .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/status', this.getBlockStatus)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/txid/:index', this.getBlockTxidAt)
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/merkle-proof', this.getTransactionMerkleProof)
           .get(config.MEMPOOL.API_URL_PREFIX + 'txs/outspends', this.$getBatchedOutspends)
           .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/header', this.getBlockHeader)
@@ -172,10 +183,27 @@ class BitcoinRoutes {
       res.send('Service Unavailable');
       return;
     }
-    const result = feeApi.getPreciseRecommendedFee();
+    const precise = feeApi.getPreciseRecommendedFee();
+    // Suelo de 1 sat/vB. El nodo retransmite desde 0,1 sat/vB, así que las estimaciones
+    // "precisas" bajan de 1 cuando el mempool está vacío; pero la mayoría de mineros usan el
+    // blockmintxfee por defecto (1 sat/vB) y no incluyen nada por debajo. Un wallet que se
+    // fiaba de esta ruta (el Ark de Paperclip, 1 oct 2026) emitió a 0,51 sat/vB y su
+    // transacción se quedó atascada con bloques casi vacíos hasta hacerle CPFP.
+    const floor = (v: number): number => Math.max(1, v);
+    const result = {
+      fastestFee: floor(precise.fastestFee),
+      halfHourFee: floor(precise.halfHourFee),
+      hourFee: floor(precise.hourFee),
+      economyFee: floor(precise.economyFee),
+      minimumFee: floor(precise.minimumFee),
+    };
 
+    // Sin la clave 'warning' que mete upstream: en Esplora este objeto es SOLO {objetivo: tasa}
+    // y los clientes (esplora-client, el wallet Ark) lo leen como mapa número→número; una
+    // clave de texto hacía fallar la lectura entera y caían a una comisión por defecto.
+    // El aviso de que la ruta está obsoleta va ahora en una cabecera.
+    res.setHeader('Warning', '299 - "Deprecated: use /api/v1/fees/precise"');
     res.json({
-      'warning': 'This endpoint is deprecated and will be removed in a future release. Please use /api/v1/fees/precise instead.',
       '1': result.fastestFee,
       '2': result.fastestFee,
       '3': result.halfHourFee,
@@ -486,6 +514,57 @@ class BitcoinRoutes {
    * OJO: es el tamaño de ESTE nodo; varía un poco entre nodos según los bloques huérfanos
    * que cada uno haya guardado. Cacheado 60s porque el frontend lo pide cada minuto.
    */
+  /**
+   * Política de retransmisión del nodo que difunde las transacciones de este mempool, tal
+   * cual la da getmempoolinfo (BTC/kvB). El wallet Ark de Paperclip la exige antes de abrir
+   * posiciones nuevas: sus transacciones de anclaje pagan comisiones muy bajas y solo las
+   * acepta un nodo con minrelaytxfee/mempoolminfee ≤ 0,00001 y dustrelayfee ≤ 0,00003.
+   * Por RPC lo pregunta al nodo; por Esplora (el móvil) lo pregunta aquí.
+   */
+  private getBlake2bRelayPolicy(req: Request, res: Response) {
+    const info: any = mempool.getMempoolInfo();
+    const pick = (k: string): number | null => (typeof info?.[k] === 'number' ? info[k] : null);
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.json({
+      minrelaytxfee: pick('minrelaytxfee'),
+      mempoolminfee: pick('mempoolminfee'),
+      dustrelayfee: pick('dustrelayfee'),
+      incrementalrelayfee: pick('incrementalrelayfee'),
+    });
+  }
+
+  /** Whether this transaction is also on the Spamchain, and which outputs it spent there. Ver api/spamchain.ts. */
+  private async getBlake2bSpamchainTx(req: Request, res: Response) {
+    if (!/^[a-fA-F0-9]{64}$/.test(req.params.txId)) {
+      handleError(req, res, 400, 'Invalid transaction ID');
+      return;
+    }
+    if (!spamchain.enabled) {
+      handleError(req, res, 404, 'Spamchain lookups are not configured');
+      return;
+    }
+    try {
+      const data = await spamchain.$get(req.params.txId.toLowerCase());
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.json(data);
+    } catch (e) {
+      handleError(req, res, 500, 'Failed to look up the transaction on the Spamchain');
+    }
+  }
+
+  /** Datos del cabecero para el widget de Android. Ver api/blake2b-widget.ts. */
+  private async getBlake2bWidget(req: Request, res: Response) {
+    try {
+      const data = await blake2bWidget.$get();
+      // Cache-Control para que cualquier caché intermedia (o Cloudflare) pueda servirlo.
+      res.setHeader('Cache-Control', 'public, max-age=60');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.json(data);
+    } catch (e) {
+      handleError(req, res, 503, 'widget data unavailable');
+    }
+  }
+
   private async getBlake2bChainSize(req: Request, res: Response) {
     try {
       const now = Date.now();
@@ -1313,7 +1392,8 @@ class BitcoinRoutes {
       if (req.query.after_txid && typeof req.query.after_txid === 'string') {
         lastTxId = req.query.after_txid;
       }
-      const transactions = await bitcoinApi.$getScriptHashTransactions(electrumScripthash, lastTxId);
+      // 25 = tamaño de página Esplora (ver electrum-api.ts).
+      const transactions = await bitcoinApi.$getScriptHashTransactions(electrumScripthash, lastTxId, 25);
       res.json(transactions);
     } catch (e) {
       if (e instanceof Error && e.message && (e.message.indexOf('too long') > 0 || e.message.indexOf('confirmed status') > 0)) {
@@ -1553,6 +1633,115 @@ class BitcoinRoutes {
     }
   }
 
+  /** Esplora `GET /tx/:txid/raw`: la transacción en binario (no en hex como `/hex`). */
+  private async getRawTransactionBinary(req: Request, res: Response) {
+    if (!TXID_REGEX.test(req.params.txId)) {
+      handleError(req, res, 400, `Invalid transaction ID`);
+      return;
+    }
+    try {
+      const transaction: IEsploraApi.Transaction = await bitcoinApi.$getRawTransaction(req.params.txId, true);
+      res.setHeader('content-type', 'application/octet-stream');
+      res.send(Buffer.from(transaction.hex || '', 'hex'));
+    } catch (e) {
+      if (e instanceof Error && e.message && e.message.indexOf('No such mempool or blockchain transaction') > -1) {
+        handleError(req, res, 404, 'No such mempool or blockchain transaction');
+        return;
+      }
+      handleError(req, res, 500, 'Failed to get raw transaction');
+    }
+  }
+
+  /** Esplora `GET /tx/:txid/outspend/:vout`: si UNA salida está gastada y por quién. */
+  private async getTransactionOutspend(req: Request, res: Response) {
+    const vout = Number(req.params.vout);
+    if (!TXID_REGEX.test(req.params.txId) || !Number.isInteger(vout) || vout < 0) {
+      handleError(req, res, 400, `Invalid transaction ID or output index`);
+      return;
+    }
+    try {
+      // Gastada por una transacción del mempool: el backend ya lleva ese índice.
+      const mempoolSpender = mempool.getSpendMap().get(`${req.params.txId}:${vout}`);
+      if (mempoolSpender) {
+        const vin = mempoolSpender.vin.findIndex((i) => i.txid === req.params.txId && i.vout === vout);
+        res.json({ spent: true, txid: mempoolSpender.txid, vin, status: { confirmed: false } });
+        return;
+      }
+      if (bitcoinApi.$getOutspendDetailed) {
+        const detailed = await bitcoinApi.$getOutspendDetailed(req.params.txId, vout);
+        if (detailed === null) {
+          handleError(req, res, 404, 'Output index out of range');
+          return;
+        }
+        res.json(detailed);
+        return;
+      }
+      const outspends = await bitcoinApi.$getOutspends(req.params.txId);
+      if (vout >= outspends.length) {
+        handleError(req, res, 404, 'Output index out of range');
+        return;
+      }
+      res.json(outspends[vout]);
+    } catch (e) {
+      // Una transacción que el nodo no conoce es un 404 en Esplora, no un error del servidor:
+      // los clientes lo leen como "no existe" y siguen. Con 500 el wallet Ark abortaba la sync.
+      const msg = e instanceof Error ? e.message : (typeof e === 'object' && e ? JSON.stringify(e) : String(e));
+      if (/No such mempool or blockchain transaction|not found|"code":-5/i.test(msg) || (e as any)?.code === -5) {
+        handleError(req, res, 404, 'Transaction not found');
+        return;
+      }
+      logger.warn(`outspend ${req.params.txId}:${vout} failed: ${msg}`);
+      handleError(req, res, 500, 'Failed to get transaction outspend');
+    }
+  }
+
+  /** Esplora `GET /scripthash/:hash/txs/chain/:last_seen`: siguiente página de confirmadas. */
+  private async getScriptHashTransactionsChain(req: Request, res: Response): Promise<void> {
+    if (!TXID_REGEX.test(req.params.lastSeen)) {
+      handleError(req, res, 400, `Invalid transaction ID`);
+      return;
+    }
+    req.query.after_txid = req.params.lastSeen;
+    return this.getScriptHashTransactions(req, res);
+  }
+
+  /** Esplora `GET /block/:hash/status`: si el bloque está en la cadena buena, su altura y el siguiente. */
+  private async getBlockStatus(req: Request, res: Response) {
+    if (!/^[a-fA-F0-9]{64}$/.test(req.params.hash)) {
+      handleError(req, res, 400, `Invalid block hash`);
+      return;
+    }
+    try {
+      const h: any = await bitcoinClient.getBlockHeader(req.params.hash, true);
+      const inBest = typeof h?.confirmations === 'number' && h.confirmations > 0;
+      res.json(inBest
+        ? { in_best_chain: true, height: h.height, next_best: h.nextblockhash ?? null }
+        : { in_best_chain: false });
+    } catch (e) {
+      handleError(req, res, 404, 'Block not found');
+    }
+  }
+
+  /** Esplora `GET /block/:hash/txid/:index`: el txid en esa posición del bloque. */
+  private async getBlockTxidAt(req: Request, res: Response) {
+    const index = Number(req.params.index);
+    if (!/^[a-fA-F0-9]{64}$/.test(req.params.hash) || !Number.isInteger(index) || index < 0) {
+      handleError(req, res, 400, `Invalid block hash or index`);
+      return;
+    }
+    try {
+      const txids = await bitcoinApi.$getTxIdsForBlock(req.params.hash);
+      if (index >= txids.length) {
+        handleError(req, res, 404, 'Transaction index out of range');
+        return;
+      }
+      res.setHeader('content-type', 'text/plain');
+      res.send(txids[index]);
+    } catch (e) {
+      handleError(req, res, 404, 'Block not found');
+    }
+  }
+
   private async getTransactionOutspends(req: Request, res: Response) {
     if (!TXID_REGEX.test(req.params.txId)) {
       handleError(req, res, 400, `Invalid transaction ID`);
@@ -1560,23 +1749,31 @@ class BitcoinRoutes {
     }
     try {
       const result = await bitcoinApi.$getOutspends(req.params.txId);
+      // Upstream (bitcoind/electrum backend) answers only {spent}. Esplora gives, for each
+      // spent output, who spent it and whether that is confirmed, and Ark (bark) reads those
+      // fields: without a status it takes every spend for unconfirmed, and an emergency exit
+      // whose input was spent long ago kept saying "too recent to end the exit on" forever.
+      // Fill them in as the single-output route does: the mempool spend map, then the history.
+      if (bitcoinApi.$getOutspendDetailed) {
+        for (let vout = 0; vout < result.length; vout++) {
+          if (!result[vout].spent) {
+            continue;
+          }
+          const mempoolSpender = mempool.getSpendMap().get(`${req.params.txId}:${vout}`);
+          if (mempoolSpender) {
+            const vin = mempoolSpender.vin.findIndex((i) => i.txid === req.params.txId && i.vout === vout);
+            result[vout] = { spent: true, txid: mempoolSpender.txid, vin, status: { confirmed: false } };
+            continue;
+          }
+          const detailed = await bitcoinApi.$getOutspendDetailed(req.params.txId, vout);
+          if (detailed) {
+            result[vout] = detailed;
+          }
+        }
+      }
       res.json(result);
     } catch (e) {
       handleError(req, res, 500, 'Failed to get transaction outspends');
-    }
-  }
-
-  private async $getTransactionSpamchain(req: Request, res: Response) {
-    if (!TXID_REGEX.test(req.params.txId)) {
-      handleError(req, res, 400, `Invalid transaction ID`);
-      return;
-    }
-    try {
-      const result = await spamchain.$check(req.params.txId);
-      res.set('Cache-control', 'public, max-age=60');
-      res.json(result);
-    } catch (e) {
-      handleError(req, res, 500, 'Failed to check spamchain status');
     }
   }
 
@@ -1606,14 +1803,42 @@ class BitcoinRoutes {
     }
   }
 
+  /**
+   * Cuerpo crudo de la petición cuando ningún parser de express lo recogió (sin cabecera
+   * Content-Type, que es como mandan POST /tx y /txs/package los clientes Esplora:
+   * esplora-client, bdk y el wallet Ark). null si ya lo consumió un parser.
+   */
+  private static readRawBody(req: Request): Promise<string | null> {
+    if (!req.readable) {
+      return Promise.resolve(null);
+    }
+    return new Promise<string>((resolve, reject) => {
+      let data = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        data += chunk;
+        if (data.length > 10 * 1024 * 1024) { reject(new Error('body too large')); }
+      });
+      req.on('end', () => resolve(data));
+      req.on('error', reject);
+    });
+  }
+
   private async $postTransaction(req: Request, res: Response) {
     res.setHeader('content-type', 'text/plain');
     try {
+      // Esplora acepta el hex sin Content-Type; express solo lo parseaba con text/plain y
+      // el resto llegaba vacío ("Non-string request body", código -1).
+      if (typeof req.body !== 'string') {
+        const raw = await BitcoinRoutes.readRawBody(req);
+        if (raw !== null) { req.body = raw.trim(); }
+      }
       const rawTx = Common.getTransactionFromRequest(req, false);
       const txIdResult = await bitcoinApi.$sendRawTransaction(rawTx);
       res.send(txIdResult);
     } catch (e: any) {
-      handleError(req, res, 400, (e.message && e.code) ? 'sendrawtransaction RPC error: ' + JSON.stringify({ code: e.code })
+      logger.warn(`sendrawtransaction failed: code ${e?.code} ${e?.message}`);
+      handleError(req, res, 400, (e.message && e.code) ? 'sendrawtransaction RPC error: ' + JSON.stringify({ code: e.code, message: e.message })
         : 'Failed to send raw transaction');
     }
   }
@@ -1644,13 +1869,29 @@ class BitcoinRoutes {
 
   private async $submitPackage(req: Request, res: Response) {
     try {
+      // Los clientes Esplora (esplora-client, y con él el wallet Ark) mandan el array JSON SIN
+      // cabecera Content-Type; ningún parser de express lo recoge y req.body llega vacío. En
+      // ese caso se lee el cuerpo crudo y se interpreta como JSON, como hace Esplora.
+      if (!Array.isArray(req.body)) {
+        const raw = await BitcoinRoutes.readRawBody(req);
+        if (raw !== null) {
+          try { req.body = JSON.parse(raw); } catch { /* lo rechaza la validación de abajo */ }
+        }
+      }
       const rawTxs = Common.getTransactionsFromRequest(req);
-      const maxfeerate = parseFloat(req.query.maxfeerate as string);
-      const maxburnamount = parseFloat(req.query.maxburnamount as string);
-      const result = await bitcoinClient.submitPackage(rawTxs, maxfeerate ?? undefined, maxburnamount ?? undefined);
+      // parseFloat(undefined) es NaN, y `NaN ?? undefined` sigue siendo NaN: sin el
+      // parámetro hay que no mandar nada, no un NaN.
+      const num = (v: unknown): number | undefined => {
+        const n = parseFloat(v as string);
+        return isFinite(n) ? n : undefined;
+      };
+      const result = await bitcoinClient.submitPackage(rawTxs, num(req.query.maxfeerate), num(req.query.maxburnamount));
       res.send(result);
     } catch (e: any) {
-      handleError(req, res, 400, (e.message && e.code) ? 'submitpackage RPC error: ' + JSON.stringify({ code: e.code })
+      // El mensaje del nodo explica el rechazo; upstream solo devolvía el código (-1) y no
+      // había forma de saber por qué. No es información sensible: es la regla incumplida.
+      logger.warn(`submitpackage failed: code ${e?.code} ${e?.message}`);
+      handleError(req, res, 400, (e.message && e.code) ? 'submitpackage RPC error: ' + JSON.stringify({ code: e.code, message: e.message })
         : 'Failed to submit package');
     }
   }

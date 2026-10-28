@@ -34,9 +34,15 @@ import { OldestNodes } from '@app/lightning/nodes-ranking/oldest-nodes/oldest-no
 import { NodesRankingsDashboard } from '@app/lightning/nodes-rankings-dashboard/nodes-rankings-dashboard.component';
 import { NodeChannels } from '@app/lightning/nodes-channels/node-channels.component';
 import { GroupComponent } from '@app/lightning/group/group.component';
+import { LightningDirectoryComponent } from '@app/lightning/directory/directory.component';
+import { NodeDirectoryCardComponent } from '@app/lightning/directory/node-directory-card.component';
+import { DirectoryEditorComponent } from '@app/lightning/directory/directory-editor.component';
 
 @NgModule({
   declarations: [
+    LightningDirectoryComponent,
+    NodeDirectoryCardComponent,
+    DirectoryEditorComponent,
     LightningDashboardComponent,
     NodesListComponent,
     NodeStatisticsComponent,

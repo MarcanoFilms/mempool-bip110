@@ -12,7 +12,6 @@ import { AccelerateFeeGraphComponent } from '@components/accelerate-checkout/acc
 import { TransactionRawComponent } from '@components/transaction/transaction-raw.component';
 import { CpfpInfoComponent } from '@components/transaction/cpfp-info.component';
 import { ClusterDiagramComponent } from '@components/cluster-diagram/cluster-diagram.component';
-import { SpamchainStatusComponent } from '@components/transaction/spamchain-status/spamchain-status.component';
 
 const routes: Routes = [
   {
@@ -60,7 +59,6 @@ export class TransactionRoutingModule { }
     TransactionRawComponent,
     CpfpInfoComponent,
     ClusterDiagramComponent,
-    SpamchainStatusComponent,
   ],
   exports: [
     TransactionComponent,

@@ -549,10 +549,3 @@ export interface StaleTip extends ChainTip {
   stale: BlockExtended;
   canonical: BlockExtended;
 }
-export interface SpamchainStatus {
-  status: 'replayed' | 'replayed_spent' | 'mempool' | 'only_xbt' | 'disabled' | 'error';
-  shaBlockHeight?: number;
-  spentOutputs?: number;
-  totalOutputs?: number;
-  checkedAt?: number;
-}

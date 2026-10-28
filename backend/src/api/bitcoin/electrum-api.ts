@@ -50,15 +50,13 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
     try {
       const balance = await this.$getScriptHashBalance(addressInfo.scriptPubKey);
       const history = await this.$getScriptHashHistory(addressInfo.scriptPubKey);
-      const utxos = await this.$getScriptHashUnspent(this.encodeScriptHash(addressInfo.scriptPubKey));
 
       const unconfirmed = history.filter((h) => h.fee).length;
-      const confirmedUtxoCount = utxos.filter((u) => u.height > 0).length;
 
       return {
         'address': addressInfo.address,
         'chain_stats': {
-          'funded_txo_count': confirmedUtxoCount,
+          'funded_txo_count': 0,
           'funded_txo_sum': balance.confirmed ? balance.confirmed : 0,
           'spent_txo_count': 0,
           'spent_txo_sum': balance.confirmed < 0 ? balance.confirmed : 0,
@@ -99,7 +97,7 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
           startingIndex = pos + 1;
         }
       }
-      const endIndex = Math.min(startingIndex + 50, history.length);
+      const endIndex = Math.min(startingIndex + 10, history.length);
 
       for (let i = startingIndex; i < endIndex; i++) {
         const tx = await this.$getRawTransaction(history[i].tx_hash, false, true);
@@ -158,7 +156,13 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
     return this.$getScriptHashUtxos(scripthash);
   }
 
-  async $getScriptHashTransactions(scripthash: string, lastSeenTxId?: string): Promise<IEsploraApi.Transaction[]> {
+  /**
+   * `pageSize` 10 es lo que usa la web de mempool; las rutas Esplora por scripthash piden
+   * 25, que es el tamaño de página de Esplora: los clientes (bdk_esplora, y con él el
+   * wallet Ark) dan por acabado el historial cuando una página trae MENOS de 25, así que
+   * con 10 se perdían en silencio las transacciones a partir de la décima.
+   */
+  async $getScriptHashTransactions(scripthash: string, lastSeenTxId?: string, pageSize = 10): Promise<IEsploraApi.Transaction[]> {
     try {
       loadingIndicators.setProgress('address-' + scripthash, 0);
 
@@ -176,11 +180,15 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
       let startingIndex = 0;
       if (lastSeenTxId) {
         const pos = history.findIndex((historicalTx) => historicalTx.tx_hash === lastSeenTxId);
-        if (pos) {
-          startingIndex = pos + 1;
+        // Antes era `if (pos)`: con la última vista en la posición 0 volvía a empezar por el
+        // principio, y con una que no existe (-1) también. Ahora: 0 → sigue desde la 1,
+        // inexistente → página vacía en vez de repetir la primera.
+        if (pos < 0) {
+          return [];
         }
+        startingIndex = pos + 1;
       }
-      const endIndex = Math.min(startingIndex + 50, history.length);
+      const endIndex = Math.min(startingIndex + pageSize, history.length);
 
       for (let i = startingIndex; i < endIndex; i++) {
         const tx = await this.$getRawTransaction(history[i].tx_hash, false, true);
@@ -238,6 +246,41 @@ class BitcoindElectrsApi extends BitcoinApi implements AbstractBitcoinApi {
   async $getTransactionMerkleProof(txId: string): Promise<IEsploraApi.MerkleProof> {
     const tx = await this.$getRawTransaction(txId);
     return this.electrumClient.blockchainTransaction_getMerkle(txId, tx.status.block_height);
+  }
+
+  /**
+   * Esplora `/tx/:txid/outspend/:vout` COMPLETO para una salida sin gastar o gastada en un
+   * bloque (el caso "gastada en el mempool" lo resuelve la ruta con el spendMap).
+   * Upstream solo decía `{spent: true}`; Esplora da además quién la gastó (txid, vin) y si
+   * está confirmado. El wallet Ark (bark) hace `expect()` sobre esos campos: sin ellos se
+   * caía el motor entero en cuanto se gastaba una moneda. El gastador se busca en el
+   * historial del script de esa salida (Electrum/Shulcrum), que es como lo hace electrs.
+   */
+  async $getOutspendDetailed(txId: string, vout: number): Promise<IEsploraApi.Outspend | null> {
+    // Formato Esplora (scriptpubkey, status): con skipConversion=true vendría el crudo del
+    // nodo (scriptPubKey.hex y sin status) y el historial no se podía consultar.
+    const tx = await this.$getRawTransaction(txId, false, false);
+    if (vout < 0 || vout >= tx.vout.length) {
+      return null;
+    }
+    const txOut = await this.bitcoindClient.getTxOut(txId, vout);
+    if (txOut !== null) {
+      return { spent: false };
+    }
+    const fromHeight = tx.status?.block_height || 0;
+    const history = (await this.$getScriptHashHistory(tx.vout[vout].scriptpubkey))
+      .filter((h) => h.tx_hash !== txId && (h.height <= 0 || h.height >= fromHeight))
+      .sort((a, b) => (a.height <= 0 ? 1e9 : a.height) - (b.height <= 0 ? 1e9 : b.height))
+      .slice(0, 500);
+    for (const h of history) {
+      const cand = await this.$getRawTransaction(h.tx_hash, false, false);
+      const vin = cand.vin.findIndex((i) => i.txid === txId && i.vout === vout);
+      if (vin >= 0) {
+        return { spent: true, txid: cand.txid, vin, status: cand.status };
+      }
+    }
+    // Gastada según el nodo pero sin gastador localizable (no debería pasar).
+    return { spent: true };
   }
 
   private $getScriptHashBalance(scriptHash: string): Promise<IElectrumApi.ScriptHashBalance> {

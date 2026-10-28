@@ -9,6 +9,7 @@ import { MiningStats } from '@app/services/mining.service';
 import { Filter, TransactionFlags } from '@app/shared/filters.utils';
 import { StateService } from '@app/services/state.service';
 import { CacheService } from '@app/services/cache.service';
+import { ApiService } from '@app/services/api.service';
 
 @Component({
   selector: 'app-transaction-details',
@@ -55,11 +56,18 @@ export class TransactionDetailsComponent implements OnChanges {
   // deduce (orden del bloque vs fee efectiva) da falsos positivos porque el minado solo/DATUM
   // no ordena estrictamente por fee. Así que solo lo mostramos si ACCELERATOR está activo.
   oobPriorityEnabled: boolean;
+  // Is this transaction also on the Spamchain (replayed between the chains)? null until known.
+  spamchain: { status: string; height?: number; time?: number; outputs?: string[]; spenders?: (string | null)[]; explorer?: string } | null = null;
+  spamchainSpent = 0;
+  // Spent outputs and, when known, the Spamchain transaction that spent each one.
+  spamchainSpentList: { vout: number; spender: string | null }[] = [];
+  private spamchainTxid: string;
 
   constructor(
     private stateService: StateService,
     private cacheService: CacheService,
     private cd: ChangeDetectorRef,
+    private apiService: ApiService,
   ) {
     this.officialMempoolSpace = this.stateService.env.OFFICIAL_MEMPOOL_SPACE;
     this.oobPriorityEnabled = this.stateService.env.ACCELERATOR;
@@ -69,6 +77,7 @@ export class TransactionDetailsComponent implements OnChanges {
     if (!changes.tx) {
       return;
     }
+    this.loadSpamchain();
     this.acceleratorSavingsSats = 0;
     const hasIneligibleFlags = ((this.tx?.flags ?? 0n) & (TransactionFlags.inscription | TransactionFlags.sighash_none | TransactionFlags.sighash_single | TransactionFlags.sighash_acp)) > 0n;
     if (this.officialMempoolSpace
@@ -125,5 +134,30 @@ export class TransactionDetailsComponent implements OnChanges {
       chunkFeerate: chunk?.feerate ?? 0,
       otherChunks: Math.max(0, (cluster?.chunks.length ?? 0) - 1),
     };
+  }
+
+  private loadSpamchain(): void {
+    const txid = this.tx?.txid;
+    if (!txid || txid === this.spamchainTxid || this.network) {
+      return;
+    }
+    this.spamchainTxid = txid;
+    this.spamchain = null;
+    this.spamchainSpent = 0;
+    this.spamchainSpentList = [];
+    this.apiService.getBlake2bSpamchainTx$(txid).subscribe({
+      next: (data) => {
+        if (this.tx?.txid !== txid || data?.status === 'unavailable') {
+          return;
+        }
+        this.spamchain = data;
+        this.spamchainSpentList = (data.outputs || [])
+          .map((o: string, vout: number) => o === 'spent' ? { vout, spender: data.spenders?.[vout] || null } : null)
+          .filter((o) => o);
+        this.spamchainSpent = this.spamchainSpentList.length;
+        this.cd.markForCheck();
+      },
+      error: () => {},
+    });
   }
 }

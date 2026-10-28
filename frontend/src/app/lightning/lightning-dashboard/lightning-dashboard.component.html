@@ -2,6 +2,18 @@
 
 <div class="container-xl dashboard-container">
 
+  <!-- Nodex (the BLAKE2b Lightning explorer) first, then the node directory (Kilombino fork):
+       cards that node operators publish themselves, signing with their node -->
+  <div class="mb-3 d-flex flex-column flex-md-row gap-2">
+    <a class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2" href="https://nodex.kilombino.com" target="_blank" rel="noopener">
+      <img src="/resources/nodex-logo.webp" alt="Nodex" height="30" style="border-radius: 6px">
+      <span i18n="@@lightning.nodex-banner">Nodex: node pages, fees both ways and rankings</span>
+    </a>
+    <a class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center gap-2" [routerLink]="['/lightning/directory' | relativeUrl]">
+      📇 <span i18n="@@lightning.directory-banner">Node directory: contact node operators to open channels</span>
+    </a>
+  </div>
+
   <div class="row row-cols-1 row-cols-md-2">
 
     <!-- Network capacity/channels/nodes -->

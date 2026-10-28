@@ -81,8 +81,6 @@
       (accelerateClicked)="onAccelerateClicked()"
       (toggleCpfp$)="toggleCpfp()"
     ></app-transaction-details>
-
-    <app-spamchain-status [txid]="tx?.txid"></app-spamchain-status>
   }
 
   <ng-template [ngIf]="!isLoadingTx && !error">

@@ -70,8 +70,14 @@ Disallow: /
 User-agent: DotBot
 Disallow: /
 
-# ---- Everyone else: homepage OK, heavy/infinite paths blocked ----
+User-agent: ShapBot
+Disallow: /
+
+# ---- Everyone else: main pages OK, heavy/infinite paths blocked ----
 User-agent: *
+Allow: /$
+Allow: /about
+Allow: /docs
 Disallow: /tx/
 Disallow: /address/
 Disallow: /block/
@@ -83,6 +89,10 @@ Disallow: /mining/
 Disallow: /graphs/
 Disallow: /rbf
 Disallow: /testnet/
+Disallow: /testnet4/
 Disallow: /signet/
 Disallow: /tx/push
+Disallow: /*/tx/
+Disallow: /*/address/
+Disallow: /*/block/
 Crawl-delay: 10

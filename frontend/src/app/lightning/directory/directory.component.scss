@@ -1,0 +1,23 @@
+.directory-card, .directory-row { padding: 16px 20px; }
+.dir-tag { background: var(--secondary); color: var(--fg); font-weight: 500; font-size: 12px; border: 1px solid var(--primary); }
+.dir-desc { white-space: pre-wrap; margin-bottom: 8px; }
+.dir-notes { white-space: pre-wrap; color: var(--transparent-fg); font-size: 14px; }
+.dir-contact { display: flex; gap: 8px; align-items: center; padding: 6px 10px; background: var(--stat-box-bg); border-radius: 6px; overflow: hidden; }
+.dir-contact a, .dir-contact span:not(.dir-label) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dir-label { color: var(--transparent-fg); min-width: 120px; font-size: 13px; }
+.dir-meta { color: var(--transparent-fg); font-size: 13px; margin-top: 8px; }
+.dir-name { font-size: 20px; font-weight: 600; }
+.dir-stat { color: var(--transparent-fg); font-size: 14px; }
+.dir-intro { color: var(--transparent-fg); max-width: 760px; }
+.directory-editor { padding: 20px; }
+.directory-editor .form-label { margin-bottom: 2px; }
+.dir-hint { color: var(--transparent-fg); font-size: 13px; }
+.dir-challenge { padding: 14px 16px; border: 1px solid var(--primary); border-radius: 6px; background: var(--stat-box-bg); }
+.dir-text { display: flex; gap: 8px; align-items: flex-start; }
+.dir-text code, .dir-howto code { color: var(--fg); background: rgba(0, 0, 0, 0.25); padding: 4px 6px; border-radius: 4px; word-break: break-all; white-space: pre-wrap; }
+.dir-text code { flex: 1; font-size: 14px; user-select: all; }
+.dir-howto { padding-left: 18px; margin-bottom: 6px; }
+.dir-howto li { margin-bottom: 6px; font-size: 14px; }
+.dir-sig { font-family: monospace; min-width: 0; }
+
+.dir-l2l { background: #1a3a32; color: #2fd3a5; text-decoration: none; }

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { CpfpInfo, OptimizedMempoolStats, AddressInformation, LiquidPegs, ITranslators, PoolStat, BlockExtended, TransactionStripped, RewardStats, AuditScore, BlockSizesAndWeights,
-  RbfTree, BlockAudit, CurrentPegs, AuditStatus, FederationAddress, FederationUtxo, RecentPeg, PegsVolume, AccelerationInfo, TestMempoolAcceptResult, WalletAddress, Treasury, SubmitPackageResult, ChainTip, StaleTip, SpamchainStatus } from '@interfaces/node-api.interface';
+  RbfTree, BlockAudit, CurrentPegs, AuditStatus, FederationAddress, FederationUtxo, RecentPeg, PegsVolume, AccelerationInfo, TestMempoolAcceptResult, WalletAddress, Treasury, SubmitPackageResult, ChainTip, StaleTip } from '@interfaces/node-api.interface';
 import { BehaviorSubject, Observable, catchError, filter, map, of, shareReplay, take, tap } from 'rxjs';
 import { StateService } from '@app/services/state.service';
 import { Transaction } from '@interfaces/electrs.interface';
@@ -162,10 +162,6 @@ export class ApiService {
 
   getRbfCachedTx$(txid: string): Observable<Transaction> {
     return this.httpClient.get<Transaction>(this.apiBaseUrl + this.apiBasePath + '/api/v1/tx/' + txid + '/cached');
-  }
-
-  getTransactionSpamchain$(txid: string): Observable<SpamchainStatus> {
-    return this.httpClient.get<SpamchainStatus>(this.apiBaseUrl + this.apiBasePath + '/api/v1/tx/' + txid + '/spamchain');
   }
 
   getRbfList$(fullRbf: boolean, after?: string): Observable<RbfTree[]> {
@@ -330,6 +326,11 @@ export class ApiService {
   // Se leen en vivo del nodo, no de la DB.
   getBlake2bBlockHeader$(hash: string): Observable<any> {
     return this.httpClient.get<any>(this.apiBaseUrl + this.apiBasePath + '/api/v1/block/' + hash + '/blake2b-header');
+  }
+
+  // Whether a transaction also exists on the Spamchain (asked to our own node). See backend api/spamchain.ts.
+  getBlake2bSpamchainTx$(txid: string): Observable<any> {
+    return this.httpClient.get<any>(this.apiBaseUrl + this.apiBasePath + '/api/v1/blake2b/spamchain/tx/' + txid);
   }
 
   getBlockDataFromTimestamp$(timestamp: number): Observable<any> {
