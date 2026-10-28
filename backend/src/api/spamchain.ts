@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as crypto from 'crypto';
 import * as tls from 'tls';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 import logger from '../logger';
 
 /**
@@ -26,6 +27,14 @@ import logger from '../logger';
  * explorer, so nobody else learns which transactions people look up here. The node
  * needs txindex=1. SPAMCHAIN_EXPLORER_URL, if set, is passed on as `explorer` so the
  * page can link to the same transaction on a Spamchain explorer.
+ *
+ * Without a Spamchain node of our own, SPAMCHAIN_ESPLORA_URL (e.g.
+ * https://mempool.space/api) answers the same questions through a public Esplora
+ * API instead: /tx/:txid for confirmed/mempool/absent and /tx/:txid/outspends for
+ * spent outputs, which there names each spender for free. So that the public
+ * explorer does not learn which transactions people look up here, set
+ * SPAMCHAIN_SOCKS5_PROXY (e.g. socks5h://127.0.0.1:9050) and the lookups go out
+ * through Tor. SPAMCHAIN_RPC_URL, when set, always wins over the Esplora mode.
  *
  * Results are cached for 60 s per txid (at most CACHE_MAX entries), and requests for
  * the same txid while one is in flight share it.
@@ -100,7 +109,7 @@ class Spamchain {
   private inFlight = new Map<string, Promise<SpamchainStatus>>();
 
   get enabled(): boolean {
-    return !!process.env.SPAMCHAIN_RPC_URL;
+    return !!(process.env.SPAMCHAIN_RPC_URL || process.env.SPAMCHAIN_ESPLORA_URL);
   }
 
   /**
@@ -200,7 +209,57 @@ class Spamchain {
     return data;
   }
 
+  /** Esplora GET, optionally through the SOCKS5 proxy. 404 is an answer, not an error. */
+  private async esplora(path: string): Promise<{ status: number; data: any }> {
+    const base = (process.env.SPAMCHAIN_ESPLORA_URL as string).replace(/\/+$/, '');
+    const options: any = {
+      headers: { 'User-Agent': 'mempool' },
+      timeout: process.env.SPAMCHAIN_SOCKS5_PROXY ? 30_000 : HTTP_TIMEOUT_MS,
+      validateStatus: (s: number) => s === 200 || s === 404,
+    };
+    if (process.env.SPAMCHAIN_SOCKS5_PROXY) {
+      const agent = new SocksProxyAgent(process.env.SPAMCHAIN_SOCKS5_PROXY);
+      options.httpAgent = agent;
+      options.httpsAgent = agent;
+    }
+    const r = await axios.get(base + path, options);
+    return { status: r.status, data: r.data };
+  }
+
+  private async $lookupEsplora(txid: string): Promise<SpamchainStatus> {
+    const explorer = process.env.SPAMCHAIN_EXPLORER_URL || undefined;
+    let tx: { status: number; data: any };
+    try {
+      tx = await this.esplora(`/tx/${txid}`);
+    } catch (e: any) {
+      logger.warn(`Spamchain lookup of ${txid} failed: ${e.message}`);
+      return { txid, status: 'unavailable' };
+    }
+    if (tx.status === 404 || !tx.data || typeof tx.data !== 'object') {
+      return { txid, status: 'absent', explorer };
+    }
+    let outputs: SpamchainStatus['outputs'];
+    let spenders: SpamchainStatus['spenders'];
+    try {
+      const outspends = await this.esplora(`/tx/${txid}/outspends`);
+      if (outspends.status === 200 && Array.isArray(outspends.data)) {
+        outputs = outspends.data.map((o: any, n: number) =>
+          tx.data.vout?.[n]?.scriptpubkey_type === 'op_return' ? 'none' : (o?.spent ? 'spent' : 'unspent'));
+        spenders = outspends.data.map((o: any) => o?.spent && o.txid ? o.txid : null);
+      }
+    } catch (e: any) {
+      logger.debug(`Spamchain outspends of ${txid} failed: ${e.message}`);
+    }
+    if (!tx.data.status?.confirmed) {
+      return { txid, status: 'mempool', outputs, spenders, explorer };
+    }
+    return { txid, status: 'confirmed', height: tx.data.status.block_height, time: tx.data.status.block_time, outputs, spenders, explorer };
+  }
+
   private async $lookup(txid: string): Promise<SpamchainStatus> {
+    if (!process.env.SPAMCHAIN_RPC_URL) {
+      return this.$lookupEsplora(txid);
+    }
     let tx: any;
     try {
       tx = await this.rpc('getrawtransaction', [txid, true]);
