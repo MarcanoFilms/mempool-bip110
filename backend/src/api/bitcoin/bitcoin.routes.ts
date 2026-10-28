@@ -23,6 +23,7 @@ import { calculateMempoolTxCpfp } from '../cpfp';
 import { handleError } from '../../utils/api';
 import poolsUpdater from '../../tasks/pools-updater';
 import chainTips from '../chain-tips';
+import spamchain from '../spamchain';
 
 const TXID_REGEX = /^[a-f0-9]{64}$/i;
 const BLOCK_HASH_REGEX = /^[a-f0-9]{64}$/i;
@@ -111,6 +112,7 @@ class BitcoinRoutes {
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/hex', this.getRawTransaction)
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/status', this.getTransactionStatus)
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/outspends', this.getTransactionOutspends)
+          .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/spamchain', this.$getTransactionSpamchain)
           .get(config.MEMPOOL.API_URL_PREFIX + 'tx/:txId/merkle-proof', this.getTransactionMerkleProof)
           .get(config.MEMPOOL.API_URL_PREFIX + 'txs/outspends', this.$getBatchedOutspends)
           .get(config.MEMPOOL.API_URL_PREFIX + 'block/:hash/header', this.getBlockHeader)
@@ -1561,6 +1563,20 @@ class BitcoinRoutes {
       res.json(result);
     } catch (e) {
       handleError(req, res, 500, 'Failed to get transaction outspends');
+    }
+  }
+
+  private async $getTransactionSpamchain(req: Request, res: Response) {
+    if (!TXID_REGEX.test(req.params.txId)) {
+      handleError(req, res, 400, `Invalid transaction ID`);
+      return;
+    }
+    try {
+      const result = await spamchain.$check(req.params.txId);
+      res.set('Cache-control', 'public, max-age=60');
+      res.json(result);
+    } catch (e) {
+      handleError(req, res, 500, 'Failed to check spamchain status');
     }
   }
 
