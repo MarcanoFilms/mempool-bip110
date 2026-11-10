@@ -176,7 +176,13 @@ export class MasterPageComponent implements OnInit, OnDestroy {
    */
   private recomputeYields(): void {
     if (!this.networkDifficulty || !this.blockSubsidyBtc) { return; }
-    this.thsBtcDay = this.blockSubsidyBtc * 86400 * 1e12 / (this.networkDifficulty * Math.pow(2, 32));
+    // El backend puede dar la dificultad normalizada (/2^32, upstream) o en escala completa
+    // (hashes esperados por bloque, fork Oracle). Por encima de 1e15 ya viene en escala completa
+    // y no hay que volver a multiplicar: si se hace, el rendimiento sale 2^32 veces menor (≈ 0).
+    const hashesPerBlock = this.networkDifficulty > 1e15
+      ? this.networkDifficulty
+      : this.networkDifficulty * Math.pow(2, 32);
+    this.thsBtcDay = this.blockSubsidyBtc * 86400 * 1e12 / hashesPerBlock;
     this.thsUsdDay = this.btcb2Price ? this.thsBtcDay * this.btcb2Price : null;
     this.recomputeEnergy();
   }
